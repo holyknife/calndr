@@ -1,20 +1,37 @@
 [project]
 name = "nepali-calendar-api"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Nepali calendar dataset/library containing Nepali dates, tithi, festivals, public holidays, and auspicious dates for marriage and bratabandha ceremonies."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "aiohttp>=3.13.3",
-    "beautifulsoup4>=4.14.3",
-    "colorama>=0.4.6",
     "fastapi>=0.115.11",
     "uvicorn>=0.34.0",
+    "orjson>=3.10.0",
 ]
-authors = [
-    { name = "Sankalp Tharu", email = 'sankalptharu50028@gmail.com' },
+
+[project.optional-dependencies]
+scraper = [
+    "aiohttp>=3.13.3",
+    "beautifulsoup4>=4.14.3",
 ]
-[dependency-groups]
 dev = [
     "ruff>=0.14.6",
+    "httpx>=0.27.0",
+    "pytest>=8.0.0",
 ]
+
+authors = [
+    { name = "Sankalp Tharu", email = "sankalptharu50028@gmail.com" },
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
