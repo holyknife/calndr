@@ -22,36 +22,43 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Install Python 3.13
-        run: uv python install 3.13
+      - name: Install packages
+        run: pip install aiohttp orjson beautifulsoup4
 
       - name: Refresh calendar data
         env:
           MANUAL_YEAR: ${{ github.event.inputs.year }}
         run: |
           set -e
+          FAILED=0
 
           refresh_year() {
             YEAR="$1"
             TMP="$(mktemp -d)"
             echo "Scraping $YEAR into a temporary folder"
-            if DATA_DIR="$TMP" uv run python -- scraper.py "$YEAR" --single json --dir format \
-              && jq -e 'length == 12 and all(.[]; ([.days[] | select(.n != "")] | length) as $c | $c >= 29 and $c <= 32)' "$TMP/$YEAR.json" > /dev/null; then
-              rm -rf "data/$YEAR"
-              mkdir -p data
-              cp -r "$TMP/$YEAR" "data/$YEAR"
-              cp "$TMP/$YEAR.json" "data/$YEAR.json"
-              echo "Refreshed $YEAR"
-            else
-              echo "Skipping $YEAR: scrape failed or data looked wrong. Old files kept."
+            if DATA_DIR="$TMP" python scraper.py "$YEAR" --single json --dir format; then
+              if jq -e 'length == 12 and all(.[]; ([.days[] | select(.n != "")] | length) as $c | $c >= 29 and $c <= 32)' "$TMP/$YEAR.json" > /dev/null; then
+                rm -rf "data/$YEAR"
+                mkdir -p data
+                cp -r "$TMP/$YEAR" "data/$YEAR"
+                cp "$TMP/$YEAR.json" "data/$YEAR.json"
+                echo "Refreshed $YEAR"
+                return 0
+              fi
+              echo "Data check failed for $YEAR. Day counts per month:"
+              jq -c 'map_values([.days[] | select(.n != "")] | length)' "$TMP/$YEAR.json" || true
             fi
+            echo "Skipping $YEAR: scrape failed or data looked wrong. Old files kept."
+            return 1
           }
 
           if [ -n "$MANUAL_YEAR" ]; then
-            refresh_year "$MANUAL_YEAR"
+            refresh_year "$MANUAL_YEAR" || FAILED=1
           else
             AD_YEAR=$(date +%Y)
             AD_MONTH=$(date +%-m)
@@ -63,11 +70,14 @@ jobs:
             fi
             echo "Current Nepali year (approx): $BS_YEAR"
 
-            refresh_year "$BS_YEAR"
-            refresh_year "$((BS_YEAR + 1))"
+            refresh_year "$BS_YEAR" || FAILED=1
+            refresh_year "$((BS_YEAR + 1))" || true
           fi
 
+          exit $FAILED
+
       - name: Commit and push changes
+        if: ${{ !cancelled() }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
